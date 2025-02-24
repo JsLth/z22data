@@ -1,0 +1,4 @@
+raw
+zensus_grid
+*.duckdb
+*.wal
