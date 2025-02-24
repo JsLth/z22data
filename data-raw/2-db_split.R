@@ -1,6 +1,5 @@
 source("data-raw/0-setup.R")
 
-
 query_all(con, "UPDATE {table} SET feature = TRIM(feature)")
 
 # Extract a dataframe containing all combinations of table name, feature, and category
@@ -31,7 +30,7 @@ if ("x" %in% dbListFields(con, "population")) {
 }
 
 # Create a new table for each combination of table name, feature and category
-purrr::pwalk(
+pwalk(
   all_feats,
   .progress = "Fragmenting tables",
   function(table, feature, cat_code) {
@@ -55,7 +54,7 @@ purrr::pwalk(
 
 
 # Drop all original tables (except population)
-purrr::walk(c(tables[-1], "_grid"), \(x) dbExecute(con, sprintf("DROP TABLE %s", x)))
+walk(c(tables[-1], "_grid"), \(x) dbExecute(con, sprintf("DROP TABLE %s", x)))
 
 
 # Export to parquet

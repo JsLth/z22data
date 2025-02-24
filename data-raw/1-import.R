@@ -1,6 +1,4 @@
 source("data-raw/0-setup.R")
-library(tidypolars)
-library(dplyr)
 
 con <- connect()
 

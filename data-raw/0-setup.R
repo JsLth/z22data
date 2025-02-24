@@ -1,8 +1,12 @@
 library(DBI)
+library(dbplyr)
+library(dplyr)
+library(duckdb)
 library(polars)
 library(purrr)
 library(dplyr)
-library(dbplyr)
+library(tidypolars)
+library(purrr)
 
 cat_dict <- list(
   demography = list(
