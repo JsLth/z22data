@@ -70,7 +70,7 @@ for (table in names(tables)) {
     )
   }
 
-  status("Converting", basename(table_path), "from csv to parquet")
+  cli_inform("Converting {basename(table_path)} from csv to parquet.")
   sep <- guess_sep(table_path)
   csv <- scan_csv_polars(table_path, separator = sep, dtypes = dtypes) |>
     rename_with(\(old_names) unlist(new_names[old_names]))
@@ -78,16 +78,4 @@ for (table in names(tables)) {
   sink_parquet(csv, path = parq_file)
 }
 
-info()
-
-for (parq in dir(parq_dir, full.names = TRUE)) {
-  status("Creating DuckDB table", basename(parq))
-  table_en <- tables[[remove_ext(basename(parq))]]
-  dbExecute(con, sprintf(
-    "CREATE TABLE IF NOT EXISTS %s AS SELECT * FROM '%s'",
-    table_en, parq
-  ))
-}
-
-info()
-shutdown()
+shutdown(con)

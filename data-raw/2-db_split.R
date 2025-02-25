@@ -1,9 +1,21 @@
 source("data-raw/0-setup.R")
 
+con <- connect()
+
+parq_dir <- "data-raw/zensus_grid"
+for (parq in dir(parq_dir, full.names = TRUE)) {
+  table_en <- tables[[remove_ext(basename(parq))]]
+  cli_inform("Creating DuckDB table {table_en}")
+  dbExecute(con, sprintf(
+    "CREATE TABLE IF NOT EXISTS %s AS SELECT * FROM '%s'",
+    table_en, parq
+  ))
+}
+
 query_all(con, "UPDATE {table} SET feature = TRIM(feature)")
 
 # Extract a dataframe containing all combinations of table name, feature, and category
-all_feats <- lapply(tables[-1], function(x) {
+all_feats <- map(tables[-1], .progress = "Generating new table IDs", function(x) {
   tb <- tbl(con, x) |>
     distinct(feature, cat_code) |>
     collect() |>
@@ -21,12 +33,7 @@ dbExecute(con, "CREATE TABLE _grid AS SELECT grid_100m, x, y FROM population")
 # the other tables. This gives the population table the same format as the
 # other tables for consistency
 if ("x" %in% dbListFields(con, "population")) {
-  dbExecute(con, paste(
-    "CREATE TABLE population_new AS SELECT grid_100m, pop AS value,",
-    "x_mp_100m AS x, y_mp_100m AS y FROM population"
-  ))
-  dbExecute(con, "DROP TABLE population")
-  dbExecute(con, "ALTER TABLE population_new RENAME TO population")
+  db_alter(con, "SELECT grid_100m, pop AS value, x, y FROM population WHERE pop <> -1")
 }
 
 # Create a new table for each combination of table name, feature and category
@@ -44,7 +51,7 @@ pwalk(
     # create multiple smaller tables based on feature and category combinations
     dbExecute(con, sprintf(paste(
       "CREATE TABLE %s AS",
-      "SELECT t.grid_100m, t.value, t.quality, g.x, g.y FROM %s AS t",
+      "SELECT t.value, t.quality, g.x, g.y FROM %s AS t",
       "LEFT JOIN _grid AS g ON t.grid_100m = g.grid_100m",
       "WHERE (t.feature = '%s' AND t.cat_code = %s)"),
       new_name, table, feature, cat_code
@@ -52,18 +59,22 @@ pwalk(
   }
 )
 
+# Reduce size of _grid table
+db_alter(con, "SELECT x, y FROM _grid")
 
 # Drop all original tables (except population)
-walk(c(tables[-1], "_grid"), \(x) dbExecute(con, sprintf("DROP TABLE %s", x)))
+walk(tables[-1], \(x) dbExecute(con, sprintf("DROP TABLE %s", x)))
 
 
 # Export to parquet
 dir.create("data", showWarnings = FALSE)
 walk(dbListTables(con), .progress = "Exporting tables", function(table) {
   dbExecute(con, sprintf(
-    "COPY %s TO 'data/%s.parquet' (FORMAT PARQUET);",
+    "COPY %s TO 'data/%s.parquet' (FORMAT PARQUET, CODEC 'zstd', COMPRESSION_LEVEL -7);",
     table, table
   ))
   cat(create_schema(con, table), "\n", file = "data/schema.sql", append = TRUE)
   cat(create_load(con, table), "\n", file = "data/load.sql", append = TRUE)
 })
+
+shutdown(con)

@@ -7,6 +7,8 @@ library(purrr)
 library(dplyr)
 library(tidypolars)
 library(purrr)
+library(cli)
+library(httr2)
 
 cat_dict <- list(
   demography = list(
@@ -90,8 +92,10 @@ download_table <- function(table, path = tempfile(), timeout = 1000) {
   path <- normalizePath(path, "/", mustWork = FALSE)
   url <- paste0("https://www.zensus2022.de/static/DE/gitterzellen/", file)
   target_dir <- dirname(path)
-  info("Downloading ", table, " to ", target_dir)
-  download.file(url, destfile = path, quiet = TRUE)
+  cli_inform("Downloading {table} to {target_dir}")
+  request(url) |>
+    req_progress() |>
+    req_perform(path = path)
   zipfiles <- unzip(path, list = TRUE)$Name
   target_file <- zipfiles[has_file_ext(zipfiles, "csv")]
   unzip(path, files = target_file, exdir = target_dir)
@@ -110,6 +114,10 @@ remove_ext <- function(file) {
 # Exchange file extension with a different file extension
 exchange_ext <- function(file, ext) {
   gsub("\\.[[:alpha:]]+$", paste0(".", ext), file)
+}
+
+regex_match <- function(text, pattern, ...) {
+  regmatches(text, regexec(pattern, text, ...))
 }
 
 guess_sep <- function(file) {
@@ -134,14 +142,15 @@ fix_encoding <- function(file, out, chunk_size = 1e6, from = "ISO-8859-1") {
   incon <- file(file, "rb", encoding = "bytes")
   outcon <- file(out, "w", encoding = "UTF-8")
   i <- 1
+  cli_progress_step(
+    "Converted chunk {i} in {file} from {from} to UTF-8.",
+    msg_done = "Successfully converted file {file} to UTF-8.",
+    msg_failed = "Could not convert {file}."
+  )
 
   repeat {
-    status(
-      "Converted chunk", i, "in",
-      basename(file), "from", from,
-      "to UTF-8\r"
-    )
     i <- i + 1
+    cli_progress_update()
     lines <- readLines(incon, n = chunk_size, encoding = "bytes")
 
     if (!length(lines)) {
@@ -172,6 +181,17 @@ query_all <- function(con, statement, ..., population = FALSE) {
 
 change_colnames <- function(con, old, new) {
   query_all(con, "ALTER TABLE {table} RENAME COLUMN %s TO %s;", old, new)
+}
+
+db_alter <- function(con, statement, tempname = NULL) {
+  table_name <- regex_match(statement, "FROM ([a-zA-Z0-9_]+)")[[1]][2]
+  if (is.null(tempname)) {
+    tempname <- sprintf("_%s_temp", table_name)
+  }
+
+  dbExecute(con, sprintf("CREATE TABLE %s AS %s", tempname, statement))
+  dbExecute(con, sprintf("DROP TABLE %s", table_name))
+  dbExecute(con, sprintf("ALTER TABLE %s RENAME TO %s", tempname, table_name))
 }
 
 create_schema <- function(con, table) {
