@@ -1,7 +1,7 @@
-Data repository for the [https://github.com/jslth/z22](z22 R package). Similar
-to the [https://github.com/stefanjuenger/z11data](z11data) repository, it
+Data repository for the [z22 R package](https://github.com/jslth/z22). Similar
+to the [z11data](https://github.com/stefanjuenger/z11data) repository, it
 contains the gridded
-[https://www.zensus2022.de/DE/Ergebnisse-des-Zensus/gitterzellen.html](Census 2022)
+[Census 2022](https://www.zensus2022.de/DE/Ergebnisse-des-Zensus/gitterzellen.html)
 data packed into more smaller, more digestible parquet chunks. 
 
 If you wish to work with the census data offline, you can download this
