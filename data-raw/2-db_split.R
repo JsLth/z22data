@@ -33,7 +33,7 @@ dbExecute(con, "CREATE TABLE _grid AS SELECT grid_100m, x, y FROM population")
 # the other tables. This gives the population table the same format as the
 # other tables for consistency
 if ("x" %in% dbListFields(con, "population")) {
-  db_alter(con, "SELECT grid_100m, pop AS value, x, y FROM population WHERE pop <> -1")
+  db_alter(con, "SELECT pop AS value, x, y FROM population WHERE pop <> -1")
 }
 
 # Create a new table for each combination of table name, feature and category

@@ -10,6 +10,8 @@ library(purrr)
 library(cli)
 library(httr2)
 
+"%||%" <- function(x, y) if (is.null(x)) y else x
+
 # Maps CSV file names to remote file names
 url_to_table <- list(
   `Zensus_Bevoelkerung_100m-Gitter` = "csv_Bevoelkerung_100m_Gitter.zip",
@@ -18,6 +20,11 @@ url_to_table <- list(
   Haushalte100m = "Download-Tabelle_Haushalt_im_100_Meter-Gitter_im_CSV-Format.zip",
   Wohnungen100m = "Download-Tabelle_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip",
   Gebaeude100m = "Download-Tabelle_Gebaeude_und_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip"
+)
+
+url_to_table_1km <- list(
+  Klassierte_Werte = "Download-Tabelle_und_Datensatzbeschreibung_Klassierte_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip",
+  Spitze_Werte = "Download-Tabelle_und_Datensatzbeschreibung_Spitze_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip"
 )
 
 # Maps CSV file names to clean english names
@@ -30,17 +37,22 @@ tables <- list(
   Gebaeude100m = "buildings"
 )
 
+tables_1km <- list(
+  Klassierte_Werte = "ordinal",
+  Spitze_Werte = "continuous"
+)
+
 download_table <- function(table, path = tempfile(), timeout = 1000) {
   old <- options(timeout = timeout)
   on.exit(options(old))
 
   if (table %in% tables) {
     table <- names(tables)[match(table, tables)]
-  } else if (!table %in% names(tables)) {
+  } else if (!table %in% names(tables) && !table %in% names(url_to_table_1km)) {
     stop("Table not found.")
   }
 
-  file <- url_to_table[[table]]
+  file <- url_to_table[[table]] %||% url_to_table_1km[[table]]
   path <- normalizePath(path, "/", mustWork = FALSE)
   url <- paste0("https://www.zensus2022.de/static/DE/gitterzellen/", file)
   target_dir <- dirname(path)
