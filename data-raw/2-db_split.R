@@ -67,10 +67,10 @@ walk(tables[-1], \(x) dbExecute(con, sprintf("DROP TABLE %s", x)))
 
 
 # Export to parquet
-dir.create("data", showWarnings = FALSE)
+dir.create("data_100m", showWarnings = FALSE)
 walk(dbListTables(con), .progress = "Exporting tables", function(table) {
   dbExecute(con, sprintf(
-    "COPY %s TO 'data/%s.parquet' (FORMAT PARQUET, CODEC 'zstd', COMPRESSION_LEVEL -7);",
+    "COPY %s TO 'data_100m/%s.parquet' (FORMAT PARQUET, CODEC 'zstd', COMPRESSION_LEVEL -7);",
     table, table
   ))
   cat(create_schema(con, table), "\n", file = "data/schema.sql", append = TRUE)
