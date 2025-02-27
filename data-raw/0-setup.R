@@ -42,6 +42,54 @@ tables_1km <- list(
   Spitze_Werte = "continuous"
 )
 
+cat_dict <- list(
+  demography = list(
+    INSGESAMT = "total",
+    ALTER_10JG = "age_long",
+    ALTER_KURZ = "age_short",
+    FAMSTND_AUSF = "marital_status",
+    GEBURTLAND_GRP = "country_of_birth",
+    GESCHLECHT = "sex",
+    RELIGION_KURZ = "religion",
+    STAATSANGE_GRP = "citizenship_groups",
+    STAATSANGE_HLND = "citizenship_countries",
+    STAATSANGE_KURZ = "citizenship_short",
+    STAATZHL = "citizenship_number"
+  ),
+  families = list(
+    FAMTYP_KIND = "family_type",
+    FAMGROESS_KLASS = "family_size",
+    HHTYP_SENIOR_HH = "household_elderly"
+  ),
+  households = list(
+    HHTYP_FAM = "household_family",
+    HHTYP_LEB = "household_lifestyle",
+    HHGROESS_KLASS = "household_size"
+  ),
+  dwellings = list(
+    NUTZUNG_DETAIL_HHGEN = "dwelling_use",
+    WOHNEIGENTUM = "dwelling_ownership",
+    WOHNFLAECHE_10S = "dwelling_space",
+    RAUMANZAHL = "dwelling_rooms",
+    GEBAEUDEART_SYS = "building_type",
+    BAUJAHR_MZ = "building_year",
+    EIGENTUM = "building_ownership",
+    GEBTYPBAUWEISE = "building_construction",
+    GEBTYPGROESSE = "building_size",
+    HEIZTYP = "heating_type",
+    ZAHLWOHNGN_HHG = "building_dwellings"
+  ),
+  buildings = list(
+    GEBAEUDEART_SYS = "building_type",
+    BAUJAHR_MZ = "building_year",
+    EIGENTUM = "building_ownership",
+    GEBTYPBAUWEISE = "building_construction",
+    GEBTYPGROESSE = "building_size",
+    HEIZTYP = "heating_type",
+    ZAHLWOHNGN_HHG = "building_dwellings"
+  )
+)
+
 download_table <- function(table, path = tempfile(), timeout = 1000) {
   old <- options(timeout = timeout)
   on.exit(options(old))
