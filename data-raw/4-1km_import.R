@@ -10,7 +10,7 @@ for (ds in tables_1km) {
   for (feat in colnames(tb)[-1:-3]) {
     tb_feat <- select(
       tb,
-      all_of(feat),
+      value = all_of(feat),
       x = x_mp_1km,
       y = y_mp_1km
     )
