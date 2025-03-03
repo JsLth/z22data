@@ -1,6 +1,7 @@
 library(DBI)
 library(dbplyr)
 library(dplyr)
+library(tidyr)
 library(duckdb)
 library(polars)
 library(purrr)
@@ -11,6 +12,46 @@ library(cli)
 library(httr2)
 
 "%||%" <- function(x, y) if (is.null(x)) y else x
+
+z22_feats <- c(
+  "population", "citizens", "foreigners", "foreigners_from_18", "birth_country",
+  "nationality", "nationality_group", "avg_age", "age_short", "age_long",
+  "under_18", "from_65", "marital_status", "avg_hh_size", "hh_size", "net_rent",
+  "dwelling_number", "owner_occupier",
+  "vacancies", "market_vacancies", "space_inhab", "space_dwell",
+  "constr_year", "heat_type", "heat_type_resid", "heat_src",
+  "heat_src_resid"
+)
+
+url_to_table_new <- list(
+  population = "Zensus2022_Bevoelkerungszahl.zip",
+  citizens = "Deutsche_Staatsangehoerige_ab_18_Jahren.zip",
+  foreigners = "Auslaenderanteil_in_Gitterzellen.zip",
+  foreigners_from_18 = "Auslaenderanteil_ab_18_Jahren.zip",
+  birth_country = "Zensus2022_Geburtsland_Gruppen_in_Gitterzellen.zip",
+  nationality = "Zensus2022_Staatsangehoerigkeit_in_Gitterzellen.zip",
+  nationality_group = "Zensus2022_Staatsangehoerigkeit_Gruppen_in_Gitterzellen.zip",
+  avg_age = "Durchschnittsalter_in_Gitterzellen.zip",
+  age_short = "Alter_in_5_Altersklassen.zip",
+  age_long = "Alter_in_10er-Jahresgruppen.zip",
+  under_18 = "Anteil_unter_18-jaehrige_in_Gitterzellen.zip",
+  from_65 = "Anteil_ab_65-jaehrige_in_Gitterzellen.zip",
+  marital_status = "Familienstand_in_Gitterzellen.zip",
+  avg_hh_size = "Durchschnittliche_Haushaltsgroesse_in_Gitterzellen.zip",
+  hh_size = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
+  net_rent = "Zensus2022_Durchschn_Nettokaltmiete.zip",
+  dwelling_number = "Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen_in_Gitterzellen.zip",
+  owner_occupier = "Eigentuemerquote_in_Gitterzellen.zip",
+  vacancies = "Leerstandsquote_in_Gitterzellen.zip",
+  market_vacancies = "Marktaktive_Leerstandsquote_in_Gitterzellen.zip",
+  space_inhab = "Durchschnittliche_Wohnflaeche_je_Bewohner_in_Gitterzellen.zip",
+  space_dwell = "Durchschnittliche_Flaeche_je_Wohnung_in_Gitterzellen.zip",
+  constr_year = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
+  heat_type = "Zensus2022_Heizungsart.zip",
+  heat_type_resid = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsartt.zip",
+  heat_src = "Zensus2022_Energietraeger.zip",
+  heat_src_resid = "Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip"
+)
 
 # Maps CSV file names to remote file names
 url_to_table <- list(
@@ -90,6 +131,28 @@ cat_dict <- list(
   )
 )
 
+download_table2 <- function(table, path = tempfile(), timeout = 100) {
+  old <- options(timeout = timeout)
+  on.exit(options(old))
+
+  if (table %in% names(url_to_table_new)) {
+    file <- url_to_table_new[[table]]
+  } else {
+    stop("Table not found.")
+  }
+
+  path <- normalizePath(path, "/", mustWork = FALSE)
+  target_dir <- dirname(path)
+  cli::cli_inform("Downloading {table} to {target_dir}.")
+  request("https://www.zensus2022.de/") |>
+    req_url_path("static", "Zensus_Veroeffentlichung", file) |>
+    req_perform(path = path)
+  zipfiles <- unzip(path, list = TRUE)$Name
+  target_file <- zipfiles[has_file_ext(zipfiles, "csv")]
+  unzip(path, files = target_file, exdir = target_dir)
+  file.path(target_dir, target_file)
+}
+
 download_table <- function(table, path = tempfile(), timeout = 1000) {
   old <- options(timeout = timeout)
   on.exit(options(old))
@@ -115,7 +178,7 @@ download_table <- function(table, path = tempfile(), timeout = 1000) {
 }
 
 has_file_ext <- function(file, ext) {
-  grepl(sprintf("\\.%s$", ext), file)
+  suppressWarnings(grepl(sprintf("\\.%s$", ext), file))
 }
 
 # Remove a file extension
@@ -141,12 +204,8 @@ guess_sep <- function(file) {
 
 # Function to check if a CSV file is likely encoded in UTF-8
 csv_is_utf8 <- function(file, nrows = 1000, ...) {
-  csv <- read.csv2(file, nrows = nrows, ...)
-  all(vapply(
-    csv,
-    FUN.VALUE = logical(1),
-    \(x) if (is.character(x)) all(validUTF8(x)) else TRUE
-  ))
+  lines <- readLines(file, n = nrows)
+  all(validUTF8(lines))
 }
 
 # Iteratively converts file encoding from Latin-1 to UTF-8
@@ -169,7 +228,7 @@ fix_encoding <- function(file, out, chunk_size = 1e6, from = "ISO-8859-1") {
       break
     }
 
-    utf8_lines <- iconv(lines, from = "ISO-8859-1", to = "UTF-8")
+    utf8_lines <- iconv(lines, from = from, to = "UTF-8")
     writeLines(utf8_lines, outcon, useBytes = TRUE)
   }
 
@@ -193,6 +252,13 @@ query_all <- function(con, statement, ..., population = FALSE) {
 
 change_colnames <- function(con, old, new) {
   query_all(con, "ALTER TABLE {table} RENAME COLUMN %s TO %s;", old, new)
+}
+
+z22_select_feat_column <- function(csv) {
+  csv |>
+    select(!any_of(c("quality", "werterlaeuternde_Zeichen")) &
+             !starts_with(c("GITTER", "x", "y"))) |>
+    _$columns
 }
 
 db_alter <- function(con, statement, tempname = NULL) {
