@@ -131,6 +131,13 @@ cat_dict <- list(
   )
 )
 
+unzip_ext <- function(path, ext, exdir = ".") {
+  zipfiles <- unzip(path, list = TRUE)$Name
+  target_file <- zipfiles[has_file_ext(zipfiles, ext)]
+  unzip(path, files = target_file, exdir = exdir)
+  file.path(exdir, target_file)
+}
+
 download_table2 <- function(table, path = tempfile(), timeout = 100) {
   old <- options(timeout = timeout)
   on.exit(options(old))
@@ -147,10 +154,7 @@ download_table2 <- function(table, path = tempfile(), timeout = 100) {
   request("https://www.zensus2022.de/") |>
     req_url_path("static", "Zensus_Veroeffentlichung", file) |>
     req_perform(path = path)
-  zipfiles <- unzip(path, list = TRUE)$Name
-  target_file <- zipfiles[has_file_ext(zipfiles, "csv")]
-  unzip(path, files = target_file, exdir = target_dir)
-  file.path(target_dir, target_file)
+  unzip_ext(path, "csv", exdir = target_dir)
 }
 
 download_table <- function(table, path = tempfile(), timeout = 1000) {
@@ -171,10 +175,7 @@ download_table <- function(table, path = tempfile(), timeout = 1000) {
   request(url) |>
     req_progress() |>
     req_perform(path = path)
-  zipfiles <- unzip(path, list = TRUE)$Name
-  target_file <- zipfiles[has_file_ext(zipfiles, "csv")]
-  unzip(path, files = target_file, exdir = target_dir)
-  file.path(target_dir, target_file)
+  unzip_ext(path, "csv", exdir = target_dir)
 }
 
 has_file_ext <- function(file, ext) {

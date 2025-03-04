@@ -25,7 +25,13 @@ official documentation of the `z22` to see what the category codes mean.
 Generally, lower correspond to lower ordinal classes (e.g. lower codes
 correspond to lower age bins).
 
-Generally, the German Census 2022 data are available under a [Data licence
+INSPIRE grids can be found in the `grids` directory. They are taken from the
+[GeoGitter dataset](https://gdz.bkg.bund.de/index.php/default/geographische-gitter-fur-deutschland-in-lambert-projektion-geogitter-inspire.html)
+by the Federal Agency for Cartography and Geodesy (BKG). They can be useful
+if a complete grid coverage is desired as the Census data only contain those
+cells whose values are not missing.
+
+Generally, the data BKG and German Census data are available under a [Data licence
 Germany – attribution – version 2.0](https://www.govdata.de/dl-de/by-2-0) and
 can be manipulated and openly shared. **Yet, as part of this package, use them
 at your own risk and do not take the results of the functions for granted.**
