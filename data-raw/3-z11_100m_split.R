@@ -4,7 +4,9 @@ con <- connect()
 
 parq_dir <- "data-raw/zensus_grid"
 for (parq in dir(parq_dir, full.names = TRUE)) {
-  table_en <- tables[[remove_ext(basename(parq))]]
+  table_de <- remove_ext(basename(parq))
+  table_de <- gsub("100m_Gitter", "100m-Gitter", table_de)
+  table_en <- tables[[table_de]]
   cli_inform("Creating DuckDB table {table_en}")
   dbExecute(con, sprintf(
     "CREATE TABLE IF NOT EXISTS %s AS SELECT * FROM '%s'",
@@ -12,9 +14,10 @@ for (parq in dir(parq_dir, full.names = TRUE)) {
   ))
 }
 
+# Some features have leading spaces
 query_all(con, "UPDATE {table} SET feature = TRIM(feature)")
 
-# Extract a dataframe containing all combinations of table name, feature, and category
+# Extract a dataframe containing all combinations of feature, and category
 all_feats <- map(tables[-1], .progress = "Generating new table IDs", function(x) {
   tb <- tbl(con, x) |>
     distinct(feature, cat_code) |>
@@ -51,9 +54,16 @@ pwalk(
     # create multiple smaller tables based on feature and category combinations
     dbExecute(con, sprintf(paste(
       "CREATE TABLE %s AS",
-      "SELECT t.value, t.quality, g.x, g.y FROM %s AS t",
-      "LEFT JOIN _grid AS g ON t.grid_100m = g.grid_100m",
-      "WHERE (t.feature = '%s' AND t.cat_code = %s)"),
+      "SELECT
+        t.value, t.quality, g.x, g.y
+      FROM
+        %s AS t",
+      "LEFT JOIN
+        _grid AS g
+      ON
+        t.grid_100m = g.grid_100m",
+      "WHERE
+        (t.feature = '%s' AND t.cat_code = %s)"),
       new_name, table, feature, cat_code
     ))
   }
@@ -63,8 +73,7 @@ pwalk(
 db_alter(con, "SELECT x, y FROM _grid")
 
 # Drop all original tables (except population)
-walk(tables[-1], \(x) dbExecute(con, sprintf("DROP TABLE %s", x)))
-
+walk(tables[-1], \(x) db_drop_table(con, x))
 
 # Export to parquet
 dir.create("z11_data_100m", showWarnings = FALSE)

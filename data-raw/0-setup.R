@@ -3,149 +3,159 @@ library(dbplyr)
 library(dplyr)
 library(tidyr)
 library(duckdb)
-library(polars)
 library(purrr)
 library(dplyr)
-library(tidypolars)
 library(purrr)
 library(cli)
 library(httr2)
+library(jsonlite)
 
 "%||%" <- function(x, y) if (is.null(x)) y else x
+"%|||%" <- function(x, y) if (is.null(x) || all(is.na(x))) y else x
 
-z22_feats <- c(
-  "population", "citizens", "foreigners", "foreigners_from_18", "birth_country",
-  "nationality", "nationality_group", "avg_age", "age_short", "age_long",
-  "under_18", "from_65", "marital_status", "avg_hh_size", "hh_size", "net_rent",
-  "dwelling_number", "owner_occupier",
-  "vacancies", "market_vacancies", "space_inhab", "space_dwell",
-  "constr_year", "heat_type", "heat_type_resid", "heat_src",
-  "heat_src_resid"
+overview <- tribble(
+  ~theme, ~name, ~z22, ~z11_100m, ~z11_1km, ~desc,
+  "Population", "population", "population", "INSGESAMT_population", "Einwohner", "Population",
+  "Population", "foreigners", "foreigners", NA, "Auslaender_A", "Share of foreigners",
+  "Population", "citizens", "citizens", NA, NA, "Number of german citizens, 18 or older",
+  "Population", "foreigners_from_18", "foreigners_from_18", NA, NA, "Share of foreigners, 18 or older",
+  "Population", "birth_country", "birth_country", "GEBURTLAND_GRP", NA, "Country of birth (groups)",
+  "Population", "sex", NA, "GESCHLECHT", NA, "Sex",
+  "Population", "women", NA, NA, "Frauen_A", "Share of women",
+  "Population", "religion", NA, "RELIGION_KURZ", NA, "Religion",
+  "Population", "citizenship", "citizenship", "STAATSANGE_KURZ", NA, "Citizenship",
+  "Population", "citizenship_group", "citizenship_group", "STAATSANGE_GRP", NA, "Citizenship (groups)",
+  "Population", "citizenship_origin", NA, "STAATSANGE_HLND", NA, "Citizenship by selected countries",
+  "Population", "citizenship_total", NA, "STAATZHL", NA, "Number of citizenships",
+  "Population", "age_avg", "age_avg", NA, "Alter_D", "Average age",
+  "Population", "age_short", "age_short", "ALTER_KURZ", NA, "Age (five classes of years)",
+  "Population", "age_long", "age_long", "ALTER_10JG", NA, "Age (ten years age groups)",
+  "Population", "age_under_18", "age_under_18", NA, "unter18_A", "Share of people under 18",
+  "Population", "age_from_65", "age_from_65", NA, "ab65_A", "Share of people 65 or older",
+  "Population", "marital_status", "marital_status", "FAMSTND_AUSF", NA, "Marital status",
+  "Families", "families", NA, "INSGESAMT_families", NA, "Total number of families",
+  "Families", "family_type", "family_type", "FAMTYP_KIND", NA, "Type of core family (by children)",
+  "Families", "family_size", NA, "FAMGROESS_KLASS", NA, "Size of core family",
+  "Households", "households", NA, "INSGESAMT_households", NA, "Total number of private households",
+  "Households", "household_family", NA, "HHTYP_FAM", NA, "Private households by family types",
+  "Households", "household_lifestyle", NA, "HHTYP_LEB", NA, "Private households by lifestyle",
+  "Households", "household_senior", NA, "HHTYP_SENIOR_HH", NA, "Private households by senior status",
+  "Households", "household_size_avg", "household_size_avg", NA, "HHGroesse_D", "Average household size",
+  "Households", "household_size_group", "household_size_group", "HHGROESS_KLASS", NA, "Household size (groups)",
+  "Dwellings", "dwellings", "dwellings", "INSGESAMT_dwellings", NA, "Total number of dwellings",
+  "Dwellings", "rent_avg", "rent_avg", NA, NA, "Average net cold rent",
+  "Dwellings", "dwelling_occupancy", NA, "NUTZUNG_DETAIL_HHGEN", NA, "Use by household occupancy",
+  "Dwellings", "dwelling_ownership_home", NA, "WOHNEIGENTUM", NA, "Ownership of the dwelling",
+  "Dwellings", "dwelling_ownership_property", NA, "EIGENTUM_dwellings", NA, "Dwellings by form of ownership",
+  "Dwellings", "owner_occupier", "owner_occupier", NA, NA, "Share of owner occupiers",
+  "Dwellings", "vacancies", "vacancies", NA, "Leerstandsquote", "Share of vacancies",
+  "Dwellings", "market_vacancies", "market_vacancies", NA, NA, "Share of market active vacancies",
+  "Dwellings", "inhabitant_space", "inhabitant_space", NA, "Wohnfl_Bew_D", "Average living space per inhabitant",
+  "Dwellings", "dwelling_space", "dwelling_space", NA, "Wohnfl_Whg_D", "Average living space per dwelling",
+  "Dwellings", "floor_space", "floor_space", "WOHNFLAECHE_10S", NA, "Floor space of the dwelling (10m\u00b2 intervals)",
+  "Dwellings", "dwelling_type", "dwelling_type", "GEBTYPGROESSE_dwellings", NA, "Dwellings by building type",
+  "Dwellings", "dwelling_rooms", "dwelling_rooms", "RAUMANZAHL", NA, "Dwellings by number of rooms",
+  "Dwellings", "dwellings_constr_year", NA, "BAUJAHR_MZ_dwellings", NA, "Dwellings by construction year (microcensus classes)",
+  "Dwellings", "dwellings_building_type", NA, "GEBAEUDEART_SYS_dwellings", NA, "Dwellings by building classification",
+  "Dwellings", "dwellings_building_design", NA, "GEBTYPBAUWEISE_dwellings", NA, "Dwelling by building design",
+  "Dwellings", "heat_type_dwelling", "heat_type_dwelling", "HEIZTYP_dwellings", NA, "Dwellings by predominant heating type",
+  "Dwellings", "heat_src_dwelling", "heat_src_dwelling", NA, NA, "Dwellings by energy source of heating",
+  "Dwellings", "dwellings_building_size", NA, "ZAHLWOHNGN_HHG_dwellings", NA, "Dwellings by number of dwellings in the building",
+  "Buildings", "buildings", NA, "INSGESAMT_buildings", NA, "Total number of buildings",
+  "Buildings", "building_constr_year", "building_constr_year", "BAUJAHR_MZ_buildings", NA, "Buildings by construction year (microcensus classes)",
+  "Buildings", "building_dwellings", "building_dwellings", "ZAHLWOHNGN_HHG_buildings", NA, "Residential buildings by number of dwellings in the building",
+  "Buildings", "building_size", "building_size", "GEBTYPGROESSE_buildings", NA, "Residential buildings by building type",
+  "Buildings", "building_type", NA, "GEBAEUDEART_SYS_buildings", NA, "Buildings by building design",
+  "Buildings", "building_design", NA, "GEBTYPBAUWEISE_buildings", NA, "Buildings by building design",
+  "Buildings", "building_ownership_property", NA, "EIGENTUM_buildings", NA, "Buildings by form of ownership",
+  "Buildings", "heat_type_building", "heat_type_building", "HEIZTYP_buildings", NA, "Buildings by predominant heating type",
+  "Buildings", "heat_src_building", "heat_src_building", NA, NA, "Buildings by energy source of heating"
 )
 
-url_to_table_new <- list(
+# README table
+# overview |>
+#   transmute(
+#     Theme = theme,
+#     Name = paste0("`", name, "`"),
+#     Description = desc,
+#     Zensus22 = if_else(!is.na(z22), "\u2705", "\u274c"),
+#     `Zensus11 (100m)` = if_else(!is.na(z11_100m), "\u2705", "\u274c"),
+#     `Zensus11 (1km)` = if_else(!is.na(z11_1km), "\u2705", "\u274c")
+#   )
+
+z22_base_url <- "https://www.zensus2022.de/static/Zensus_Veroeffentlichung/"
+z11_base_url <- "https://www.zensus2022.de/static/DE/gitterzellen/"
+
+z22_files <- list(
   population = "Zensus2022_Bevoelkerungszahl.zip",
   citizens = "Deutsche_Staatsangehoerige_ab_18_Jahren.zip",
   foreigners = "Auslaenderanteil_in_Gitterzellen.zip",
   foreigners_from_18 = "Auslaenderanteil_ab_18_Jahren.zip",
   birth_country = "Zensus2022_Geburtsland_Gruppen_in_Gitterzellen.zip",
-  nationality = "Zensus2022_Staatsangehoerigkeit_in_Gitterzellen.zip",
-  nationality_group = "Zensus2022_Staatsangehoerigkeit_Gruppen_in_Gitterzellen.zip",
-  avg_age = "Durchschnittsalter_in_Gitterzellen.zip",
+  citizenship = "Zensus2022_Staatsangehoerigkeit_in_Gitterzellen.zip",
+  citizenship_group = "Zensus2022_Staatsangehoerigkeit_Gruppen_in_Gitterzellen.zip",
+  age_avg = "Durchschnittsalter_in_Gitterzellen.zip",
   age_short = "Alter_in_5_Altersklassen.zip",
   age_long = "Alter_in_10er-Jahresgruppen.zip",
-  under_18 = "Anteil_unter_18-jaehrige_in_Gitterzellen.zip",
-  from_65 = "Anteil_ab_65-jaehrige_in_Gitterzellen.zip",
+  age_under_18 = "Anteil_unter_18-jaehrige_in_Gitterzellen.zip",
+  age_from_65 = "Anteil_ab_65-jaehrige_in_Gitterzellen.zip",
   marital_status = "Familienstand_in_Gitterzellen.zip",
-  avg_hh_size = "Durchschnittliche_Haushaltsgroesse_in_Gitterzellen.zip",
-  hh_size = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
-  net_rent = "Zensus2022_Durchschn_Nettokaltmiete.zip",
-  dwelling_number = "Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen_in_Gitterzellen.zip",
+  family_type = "Typ_der_Kernfamilie_nach_Kindern.zip",
+  household_size_avg = "Durchschnittliche_Haushaltsgroesse_in_Gitterzellen.zip",
+  household_size_group = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
+  rent_avg = "Zensus2022_Durchschn_Nettokaltmiete.zip",
+  dwellings = "Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen_in_Gitterzellen.zip",
   owner_occupier = "Eigentuemerquote_in_Gitterzellen.zip",
   vacancies = "Leerstandsquote_in_Gitterzellen.zip",
   market_vacancies = "Marktaktive_Leerstandsquote_in_Gitterzellen.zip",
-  space_inhab = "Durchschnittliche_Wohnflaeche_je_Bewohner_in_Gitterzellen.zip",
-  space_dwell = "Durchschnittliche_Flaeche_je_Wohnung_in_Gitterzellen.zip",
-  constr_year = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
-  heat_type = "Zensus2022_Heizungsart.zip",
-  heat_type_resid = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsartt.zip",
-  heat_src = "Zensus2022_Energietraeger.zip",
-  heat_src_resid = "Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip"
+  inhabitant_space = "Durchschnittliche_Wohnflaeche_je_Bewohner_in_Gitterzellen.zip",
+  dwelling_space = "Durchschnittliche_Flaeche_je_Wohnung_in_Gitterzellen.zip",
+  floor_space = "Flaeche_der_Wohnung_10m2_Intervalle.zip",
+  dwelling_type = "Wohnungen_nach_Gebaeudetyp_Groesse.zip",
+  dwelling_rooms = "Wohnungen_nach_Zahl_der_Raeume.zip",
+  building_dwellings = "Gebaeude_mit_Wohnraum_nach_Anzahl_der_Wohnungen_im_Gebaeude.zip",
+  building_size = "Gebaeude_mit_Wohnraum_nach_Gebaeudetyp_Groesse.zip",
+  building_constr_year = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
+  heat_type_dwelling = "Zensus2022_Heizungsart.zip",
+  heat_type_building = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsartt.zip",
+  heat_src_dwelling = "Zensus2022_Energietraeger.zip",
+  heat_src_building = "Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip"
 )
 
 # Maps CSV file names to remote file names
-url_to_table <- list(
-  `Zensus_Bevoelkerung_100m-Gitter` = "csv_Bevoelkerung_100m_Gitter.zip",
-  Bevoelkerung100M = "csv_Demographie_100_Meter-Gitter.zip",
-  Familie100m = "Download-Tabelle_Familien_im_100_Meter-Gitter_im_CSV-Format%20(2).zip",
-  Haushalte100m = "Download-Tabelle_Haushalt_im_100_Meter-Gitter_im_CSV-Format.zip",
-  Wohnungen100m = "Download-Tabelle_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip",
-  Gebaeude100m = "Download-Tabelle_Gebaeude_und_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip"
+z11_100m_files <- list(
+  population = "csv_Demographie_100_Meter-Gitter.zip",
+  families = "Download-Tabelle_Familien_im_100_Meter-Gitter_im_CSV-Format%20(2).zip",
+  households = "Download-Tabelle_Haushalt_im_100_Meter-Gitter_im_CSV-Format.zip",
+  dwellings = "Download-Tabelle_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip",
+  buildings = "Download-Tabelle_Gebaeude_und_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip"
 )
 
-url_to_table_1km <- list(
-  Klassierte_Werte = "Download-Tabelle_und_Datensatzbeschreibung_Klassierte_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip",
-  Spitze_Werte = "Download-Tabelle_und_Datensatzbeschreibung_Spitze_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip"
-)
+z11_100m_file <- "Download-Tabelle_und_Datensatzbeschreibung_Spitze_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip"
 
-# Maps CSV file names to clean english names
-tables <- list(
-  `Zensus_Bevoelkerung_100m-Gitter` = "population",
-  Bevoelkerung100M = "demography",
-  Familie100m = "families",
-  Haushalte100m = "households",
-  Wohnungen100m = "dwellings",
-  Gebaeude100m = "buildings"
-)
 
-tables_1km <- list(
-  Klassierte_Werte = "ordinal",
-  Spitze_Werte = "continuous"
-)
-
-cat_dict <- list(
-  demography = list(
-    INSGESAMT = "total",
-    ALTER_10JG = "age_long",
-    ALTER_KURZ = "age_short",
-    FAMSTND_AUSF = "marital_status",
-    GEBURTLAND_GRP = "country_of_birth",
-    GESCHLECHT = "sex",
-    RELIGION_KURZ = "religion",
-    STAATSANGE_GRP = "citizenship_groups",
-    STAATSANGE_HLND = "citizenship_countries",
-    STAATSANGE_KURZ = "citizenship_short",
-    STAATZHL = "citizenship_number"
-  ),
-  families = list(
-    FAMTYP_KIND = "family_type",
-    FAMGROESS_KLASS = "family_size",
-    HHTYP_SENIOR_HH = "household_elderly"
-  ),
-  households = list(
-    HHTYP_FAM = "household_family",
-    HHTYP_LEB = "household_lifestyle",
-    HHGROESS_KLASS = "household_size"
-  ),
-  dwellings = list(
-    NUTZUNG_DETAIL_HHGEN = "dwelling_use",
-    WOHNEIGENTUM = "dwelling_ownership",
-    WOHNFLAECHE_10S = "dwelling_space",
-    RAUMANZAHL = "dwelling_rooms",
-    GEBAEUDEART_SYS = "building_type",
-    BAUJAHR_MZ = "building_year",
-    EIGENTUM = "building_ownership",
-    GEBTYPBAUWEISE = "building_construction",
-    GEBTYPGROESSE = "building_size",
-    HEIZTYP = "heating_type",
-    ZAHLWOHNGN_HHG = "building_dwellings"
-  ),
-  buildings = list(
-    GEBAEUDEART_SYS = "building_type",
-    BAUJAHR_MZ = "building_year",
-    EIGENTUM = "building_ownership",
-    GEBTYPBAUWEISE = "building_construction",
-    GEBTYPGROESSE = "building_size",
-    HEIZTYP = "heating_type",
-    ZAHLWOHNGN_HHG = "building_dwellings"
-  )
-)
-
-download_table2 <- function(table, path = tempfile(), timeout = 100) {
+download_table <- function(table, year = 2022, path = tempfile(), timeout = 1000) {
   old <- options(timeout = timeout)
   on.exit(options(old))
 
-  if (table %in% names(url_to_table_new)) {
-    file <- url_to_table_new[[table]]
-  } else {
-    stop("Table not found.")
-  }
+  switch(
+    as.character(year),
+    "2011" = {
+      urls <- z11_100m_files
+      base_url <- z11_base_url
+    },
+    "2022" = {
+      urls <- z22_files
+      base_url <- z22_base_url
+    }
+  )
 
+  file <- urls[[table]]
   path <- normalizePath(path, "/", mustWork = FALSE)
   target_dir <- dirname(path)
-  cli::cli_inform("Downloading {table} to {target_dir}.")
-  request("https://www.zensus2022.de/") |>
-    req_url_path("static", "Zensus_Veroeffentlichung", file) |>
+  cli_inform("Downloading {table} to {target_dir}")
+  request(base_url) |>
+    req_url_path_append(file) |>
     req_perform(path = path)
   zipfiles <- unzip(path, list = TRUE)$Name
   target_file <- zipfiles[has_file_ext(zipfiles, "csv")]
@@ -153,23 +163,13 @@ download_table2 <- function(table, path = tempfile(), timeout = 100) {
   file.path(target_dir, target_file)
 }
 
-download_table <- function(table, path = tempfile(), timeout = 1000) {
-  old <- options(timeout = timeout)
-  on.exit(options(old))
-
-  if (table %in% tables) {
-    table <- names(tables)[match(table, tables)]
-  } else if (!table %in% names(tables) && !table %in% names(url_to_table_1km)) {
-    stop("Table not found.")
-  }
-
-  file <- url_to_table[[table]] %||% url_to_table_1km[[table]]
+download_z11_grid <- function(path = tempfile()) {
+  file <- "csv_Bevoelkerung_100m_Gitter.zip"
   path <- normalizePath(path, "/", mustWork = FALSE)
-  url <- paste0("https://www.zensus2022.de/static/DE/gitterzellen/", file)
   target_dir <- dirname(path)
-  cli_inform("Downloading {table} to {target_dir}")
-  request(url) |>
-    req_progress() |>
+  cli_inform("Downloading grid to {target_dir}")
+  request(z11_base_url) |>
+    req_url_path_append(file) |>
     req_perform(path = path)
   zipfiles <- unzip(path, list = TRUE)$Name
   target_file <- zipfiles[has_file_ext(zipfiles, "csv")]
@@ -272,6 +272,10 @@ db_alter <- function(con, statement, tempname = NULL) {
   dbExecute(con, sprintf("ALTER TABLE %s RENAME TO %s", tempname, table_name))
 }
 
+db_drop_table <- function(con, x) {
+  dbExecute(con, sprintf("DROP TABLE %s", x))
+}
+
 create_schema <- function(con, table) {
   dtypes <- dbFetch(dbSendQuery(
     con,
@@ -298,8 +302,8 @@ info <- function(...) {
   cat(..., "\n", file = stderr())
 }
 
-connect <- function() {
-  dbConnect(duckdb::duckdb(), dbdir = "data-raw/z22.duckdb")
+connect <- function(db = "z22") {
+  dbConnect(duckdb::duckdb(), dbdir = sprintf("data-raw/%s.duckdb", db))
 }
 
 shutdown <- function(con) {
