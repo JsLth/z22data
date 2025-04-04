@@ -10,17 +10,17 @@ repository and point the z22 package to it by setting
 
 The repository contains both Census 2011 and 2022 data at various resolutions:
 
-`z11_data_1km`: Census 2011 at a 1 km resolution
-`z11_data_100m`: Census 2011 at a 100 m resolution
-`z22_data_10km`: Census 2022 at a 10 km resolution
-`z22_data_1km`: Census 2022 at a 1 km resolution
-`z22_data_100m`: Census 2022 at a 100m resolution
+- `z11_data_1km`: Census 2011 at a 1 km resolution
+- `z11_data_100m`: Census 2011 at a 100 m resolution
+- `z22_data_10km`: Census 2022 at a 10 km resolution
+- `z22_data_1km`: Census 2022 at a 1 km resolution
+- `z22_data_100m`: Census 2022 at a 100m resolution
 
 Note that not all datasets are available for each year and each resolution.
 The file names follow a simple scheme: `{feature}_{category code}.parquet`
 where `feature` is the translated name of the Census indicator and
 `category code` is  the integer representation of the category. For features
-with no categories, the category code is always 1. Otherwise, refer to the
+with no categories, the category code is always 0. Otherwise, refer to the
 official documentation of the `z22` to see what the category codes mean.
 Generally, lower correspond to lower ordinal classes (e.g. lower codes
 correspond to lower age bins).
@@ -33,5 +33,5 @@ cells whose values are not missing.
 
 Generally, the data BKG and German Census data are available under a [Data licence
 Germany – attribution – version 2.0](https://www.govdata.de/dl-de/by-2-0) and
-can be manipulated and openly shared. **Yet, as part of this package, use them
-at your own risk and do not take the results of the functions for granted.**
+can be manipulated and openly shared. **Yet, as part of this repository, use them
+at your own risk and do not take the correctness of the data files for granted.**

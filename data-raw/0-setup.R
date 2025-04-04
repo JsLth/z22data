@@ -10,14 +10,16 @@ library(cli)
 library(httr2)
 library(jsonlite)
 
+source("data-raw/categories.R")
+
 "%||%" <- function(x, y) if (is.null(x)) y else x
 "%|||%" <- function(x, y) if (is.null(x) || all(is.na(x))) y else x
 
 overview <- tribble(
   ~theme, ~name, ~z22, ~z11_100m, ~z11_1km, ~desc,
   "Population", "population", "population", "INSGESAMT_population", "Einwohner", "Population",
-  "Population", "foreigners", "foreigners", NA, "Auslaender_A", "Share of foreigners",
   "Population", "citizens", "citizens", NA, NA, "Number of german citizens, 18 or older",
+  "Population", "foreigners", "foreigners", NA, "Auslaender_A", "Share of foreigners",
   "Population", "foreigners_from_18", "foreigners_from_18", NA, NA, "Share of foreigners, 18 or older",
   "Population", "birth_country", "birth_country", "GEBURTLAND_GRP", NA, "Country of birth (groups)",
   "Population", "sex", NA, "GESCHLECHT", NA, "Sex",
@@ -33,10 +35,10 @@ overview <- tribble(
   "Population", "age_under_18", "age_under_18", NA, "unter18_A", "Share of people under 18",
   "Population", "age_from_65", "age_from_65", NA, "ab65_A", "Share of people 65 or older",
   "Population", "marital_status", "marital_status", "FAMSTND_AUSF", NA, "Marital status",
-  "Families", "families", NA, "INSGESAMT_families", NA, "Total number of families",
+  "Families", "families", "families", "INSGESAMT_families", NA, "Total number of families",
   "Families", "family_type", "family_type", "FAMTYP_KIND", NA, "Type of core family (by children)",
   "Families", "family_size", NA, "FAMGROESS_KLASS", NA, "Size of core family",
-  "Households", "households", NA, "INSGESAMT_households", NA, "Total number of private households",
+  "Households", "households", "households", "INSGESAMT_households", NA, "Total number of private households",
   "Households", "household_family", NA, "HHTYP_FAM", NA, "Private households by family types",
   "Households", "household_lifestyle", NA, "HHTYP_LEB", NA, "Private households by lifestyle",
   "Households", "household_senior", NA, "HHTYP_SENIOR_HH", NA, "Private households by senior status",
@@ -53,23 +55,23 @@ overview <- tribble(
   "Dwellings", "inhabitant_space", "inhabitant_space", NA, "Wohnfl_Bew_D", "Average living space per inhabitant",
   "Dwellings", "dwelling_space", "dwelling_space", NA, "Wohnfl_Whg_D", "Average living space per dwelling",
   "Dwellings", "floor_space", "floor_space", "WOHNFLAECHE_10S", NA, "Floor space of the dwelling (10m\u00b2 intervals)",
-  "Dwellings", "dwelling_type", "dwelling_type", "GEBTYPGROESSE_dwellings", NA, "Dwellings by building type",
   "Dwellings", "dwelling_rooms", "dwelling_rooms", "RAUMANZAHL", NA, "Dwellings by number of rooms",
-  "Dwellings", "dwellings_constr_year", NA, "BAUJAHR_MZ_dwellings", NA, "Dwellings by construction year (microcensus classes)",
-  "Dwellings", "dwellings_building_type", NA, "GEBAEUDEART_SYS_dwellings", NA, "Dwellings by building classification",
-  "Dwellings", "dwellings_building_design", NA, "GEBTYPBAUWEISE_dwellings", NA, "Dwelling by building design",
-  "Dwellings", "heat_type_dwelling", "heat_type_dwelling", "HEIZTYP_dwellings", NA, "Dwellings by predominant heating type",
-  "Dwellings", "heat_src_dwelling", "heat_src_dwelling", NA, NA, "Dwellings by energy source of heating",
-  "Dwellings", "dwellings_building_size", NA, "ZAHLWOHNGN_HHG_dwellings", NA, "Dwellings by number of dwellings in the building",
-  "Buildings", "buildings", NA, "INSGESAMT_buildings", NA, "Total number of buildings",
+  "Dwellings", "dwelling_constr_year", NA, "BAUJAHR_MZ_dwellings", NA, "Dwellings by construction year (microcensus classes)",
+  "Dwellings", "dwelling_building_dwellings", NA, "ZAHLWOHNGN_HHG_dwellings", NA, "Dwellings by number of dwellings in the building",
+  "Dwellings", "dwelling_building_size", "dwelling_building_size", "GEBTYPGROESSE_dwellings", NA, "Dwellings by building type",
+  "Dwellings", "dwelling_building_type", NA, "GEBAEUDEART_SYS_dwellings", NA, "Dwellings by building classification",
+  "Dwellings", "dwelling_building_design", NA, "GEBTYPBAUWEISE_dwellings", NA, "Dwelling by building design",
+  "Dwellings", "dwelling_heat_type", "dwelling_heat_type", "HEIZTYP_dwellings", NA, "Dwellings by predominant heating type",
+  "Dwellings", "dwelling_heat_src", "dwelling_heat_src", NA, NA, "Dwellings by energy source of heating",
+  "Buildings", "buildings", "buildings", "INSGESAMT_buildings", NA, "Total number of buildings",
+  "Buildings", "building_ownership_property", NA, "EIGENTUM_buildings", NA, "Buildings by form of ownership",
   "Buildings", "building_constr_year", "building_constr_year", "BAUJAHR_MZ_buildings", NA, "Buildings by construction year (microcensus classes)",
   "Buildings", "building_dwellings", "building_dwellings", "ZAHLWOHNGN_HHG_buildings", NA, "Residential buildings by number of dwellings in the building",
   "Buildings", "building_size", "building_size", "GEBTYPGROESSE_buildings", NA, "Residential buildings by building type",
   "Buildings", "building_type", NA, "GEBAEUDEART_SYS_buildings", NA, "Buildings by building design",
   "Buildings", "building_design", NA, "GEBTYPBAUWEISE_buildings", NA, "Buildings by building design",
-  "Buildings", "building_ownership_property", NA, "EIGENTUM_buildings", NA, "Buildings by form of ownership",
-  "Buildings", "heat_type_building", "heat_type_building", "HEIZTYP_buildings", NA, "Buildings by predominant heating type",
-  "Buildings", "heat_src_building", "heat_src_building", NA, NA, "Buildings by energy source of heating"
+  "Buildings", "building_heat_type", "building_heat_type", "HEIZTYP_buildings", NA, "Buildings by predominant heating type",
+  "Buildings", "building_heat_src", "building_heat_src", NA, NA, "Buildings by energy source of heating"
 )
 
 # README table
@@ -86,7 +88,7 @@ overview <- tribble(
 z22_base_url <- "https://www.zensus2022.de/static/Zensus_Veroeffentlichung/"
 z11_base_url <- "https://www.zensus2022.de/static/DE/gitterzellen/"
 
-z22_files <- list(
+list(
   population = "Zensus2022_Bevoelkerungszahl.zip",
   citizens = "Deutsche_Staatsangehoerige_ab_18_Jahren.zip",
   foreigners = "Auslaenderanteil_in_Gitterzellen.zip",
@@ -100,26 +102,29 @@ z22_files <- list(
   age_under_18 = "Anteil_unter_18-jaehrige_in_Gitterzellen.zip",
   age_from_65 = "Anteil_ab_65-jaehrige_in_Gitterzellen.zip",
   marital_status = "Familienstand_in_Gitterzellen.zip",
+  families = "Typ_der_Kernfamilie_nach_Kindern.zip",
   family_type = "Typ_der_Kernfamilie_nach_Kindern.zip",
+  households = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
   household_size_avg = "Durchschnittliche_Haushaltsgroesse_in_Gitterzellen.zip",
   household_size_group = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
-  rent_avg = "Zensus2022_Durchschn_Nettokaltmiete.zip",
   dwellings = "Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen_in_Gitterzellen.zip",
+  rent_avg = "Zensus2022_Durchschn_Nettokaltmiete.zip",
   owner_occupier = "Eigentuemerquote_in_Gitterzellen.zip",
   vacancies = "Leerstandsquote_in_Gitterzellen.zip",
   market_vacancies = "Marktaktive_Leerstandsquote_in_Gitterzellen.zip",
   inhabitant_space = "Durchschnittliche_Wohnflaeche_je_Bewohner_in_Gitterzellen.zip",
   dwelling_space = "Durchschnittliche_Flaeche_je_Wohnung_in_Gitterzellen.zip",
   floor_space = "Flaeche_der_Wohnung_10m2_Intervalle.zip",
-  dwelling_type = "Wohnungen_nach_Gebaeudetyp_Groesse.zip",
   dwelling_rooms = "Wohnungen_nach_Zahl_der_Raeume.zip",
+  dwelling_building_size = "Wohnungen_nach_Gebaeudetyp_Groesse.zip",
+  dwelling_heat_type = "Zensus2022_Heizungsart.zip",
+  dwelling_heat_src = "Zensus2022_Energietraeger.zip",
+  buildings = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
+  building_constr_year = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
   building_dwellings = "Gebaeude_mit_Wohnraum_nach_Anzahl_der_Wohnungen_im_Gebaeude.zip",
   building_size = "Gebaeude_mit_Wohnraum_nach_Gebaeudetyp_Groesse.zip",
-  building_constr_year = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
-  heat_type_dwelling = "Zensus2022_Heizungsart.zip",
-  heat_type_building = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsartt.zip",
-  heat_src_dwelling = "Zensus2022_Energietraeger.zip",
-  heat_src_building = "Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip"
+  building_heat_type = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsartt.zip",
+  building_heat_src = "Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip"
 )
 
 # Maps CSV file names to remote file names
@@ -131,7 +136,7 @@ z11_100m_files <- list(
   buildings = "Download-Tabelle_Gebaeude_und_Wohnungen_im_100_Meter-Gitter_im_CSV-Format.zip"
 )
 
-z11_100m_file <- "Download-Tabelle_und_Datensatzbeschreibung_Spitze_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip"
+z11_1km_file <- "Download-Tabelle_und_Datensatzbeschreibung_Spitze_Werte_im_ein_Kilometer-Gitter_im_CSV-Format.zip"
 
 
 download_table <- function(table, year = 2022, path = tempfile(), timeout = 1000) {
@@ -151,13 +156,8 @@ download_table <- function(table, year = 2022, path = tempfile(), timeout = 1000
   )
 
   file <- urls[[table]]
-  path <- normalizePath(path, "/", mustWork = FALSE)
-  target_dir <- dirname(path)
-  cli_inform("Downloading {table} to {target_dir}")
-  request(base_url) |>
-    req_url_path_append(file) |>
-    req_perform(path = path)
-  unzip_ext(path, "csv", exdir = target_dir)
+  cli_inform("Downloading {table}")
+  download_zipped_csv(base_url, file, path)
 }
 
 download_z11_grid <- function(path = tempfile()) {
@@ -165,7 +165,13 @@ download_z11_grid <- function(path = tempfile()) {
   path <- normalizePath(path, "/", mustWork = FALSE)
   target_dir <- dirname(path)
   cli_inform("Downloading grid to {target_dir}")
-  request(z11_base_url) |>
+  download_zipped_csv(z11_base_url, file, path)
+}
+
+download_zipped_csv <- function(base_url, file, path = tempfile()) {
+  path <- normalizePath(path, "/", mustWork = FALSE)
+  target_dir <- dirname(path)
+  request(base_url) |>
     req_url_path_append(file) |>
     req_perform(path = path)
   unzip_ext(path, "csv", exdir = target_dir)
@@ -262,8 +268,12 @@ z22_select_feat_column <- function(csv) {
     _$columns
 }
 
+db_peek <- function(con, table, n = 10) {
+  dbGetQuery(con, sprintf("SELECT * FROM %s LIMIT %s", table, n))
+}
+
 db_alter <- function(con, statement, tempname = NULL) {
-  table_name <- regex_match(statement, "FROM ([a-zA-Z0-9_]+)")[[1]][2]
+  table_name <- regex_match(statement, "FROM[[:space:]]+([a-zA-Z0-9_]+)")[[1]][2]
   if (is.null(tempname)) {
     tempname <- sprintf("_%s_temp", table_name)
   }

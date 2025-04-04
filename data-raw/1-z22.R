@@ -1,61 +1,125 @@
 source("data-raw/0-setup.R")
 
-con <- connect()
-dir.create("data-raw/zensus_grid", showWarnings = FALSE)
+con <- connect("z22")
 dir.create("data-raw/raw", showWarnings = FALSE)
 dir.create("z22_data_100m", showWarnings = FALSE)
 dir.create("z22_data_1km", showWarnings = FALSE)
 dir.create("z22_data_10km", showWarnings = FALSE)
 dir.create("lookup", showWarnings = FALSE)
 
-for (feat in z22_feats) {
-  file_paths <- download_table2(feat)
+for (feat in na.omit(overview$z22)) {
+  file_paths <- download_table(feat, year = 2022)
 
   for (file in file_paths) {
-    new_path <- file.path("data-raw/raw", basename(file))
-    # Grid CSVs are stored in Latin-1 encoding but polars only supports UTF-8.
-    # This leads to a broken CSV file downstream which DuckDB cannot read.
-    # -> convert encoding to UTF-8 before CSV is scanned by polars
-    # Unfortunately, this can take a while because I don't want to rely on
-    # external software like iconv which is not included by default on Windows.
-    if (!csv_is_utf8(file)) {
-      file <- fix_encoding(file, out = new_path)
-    } else {
-      file.rename(file, file <- new_path)
-    }
-
+    feat_file <- file.path("data-raw/raw", basename(file))
+    file.rename(file, feat_file)
     res <- regex_match(file, "100m|10km|1km")[[1]]
     table <- paste0(feat, "_", res)
-    clean_file <- sprintf("data-raw/zensus_grid/%s.parquet", table)
-    is_dn <- identical(feat, "dwelling_number")
-    csv <- scan_csv_polars(
-      file,
-      separator = ";",
-      null_values = c("\u2013", "\u0096"),
-      ignore_errors = is_dn
-    )
+    is_total <- feat %in% c("families", "buildings")
+    is_households <- feat %in% "households"
+    is_dwellings <- feat %in% "dwellings"
+    sep <- if_else(is_dwellings, ".", ",")
+    enc <- readr::guess_encoding(feat_file)$encoding[1]
+    enc <- if_else(!identical(enc[1], "windows-1252"), "utf-8", enc)
 
-    # The number of dwelling attribute only comes together with the net rent.
-    # Net rent, however, as its own data file, meaning it would be duplicated.
-    if (is_dn) {
-      csv <- select(csv, -durchschnMieteQM)
+    if (identical(enc, "windows-1252")) {
+      temp_file <- fix_encoding(feat_file, tempfile())
+      file.remove(feat_file)
+      file.rename(temp_file, feat_file)
+      enc <- "utf-8"
     }
 
-    # The 2022 grid data files use the comma for two different uses:
-    # - as a thousand separator (in case of integers)
-    # - as a decimal separator (in case of decimal numbers)
-    # As there isn't really any way to differentiate between integers and
-    # floats if the columns need to be parsed as strings, I am simply making
-    # the difference between "dwelling_number" (where the problem occurs)
-    # and every other table. Yes, this is silly. The following lines replace
-    # commas with nothing or a dot and then cast to numeric
-    for (col in z22_select_feat_column(csv)) {
-      new_sep <- ifelse(is_dn, "", ".")
-      csv <- csv$with_columns(
-        pl$col(col)$
-          cast(pl$String)$
-          str$replace(",", new_sep)$
-          cast(pl$Float64)
+    dbExecute(con, sprintf(
+      "CREATE TABLE IF NOT EXISTS
+        %s
+      AS SELECT
+        *
+      FROM
+        read_csv(
+          '%s',
+          delim = ';',
+          decimal_separator = '%s',
+          header = true,
+          escape = '\"',
+          nullstr = ['\u2013', '\u0096'],
+          encoding = '%s'
+        )",
+      table, feat_file, sep, enc
+    ))
+
+    has_quality <- "werterlaeuternde_Zeichen" %in% dbListFields(con, table)
+
+    # While in Zensus22, each feature usually gets its own file, totals do
+    # not follow that pattern. They are included as an own category inside
+    # categorized features concerning the respective unit (families, buildings).
+    # I created special cases to extract totals for buildings, dwellings,
+    # families and households. In the case of families and buildings, the
+    # totals are included in their own column.
+    cnames <- dbListFields(con, table)
+    col_total <- cnames[startsWith(cnames, "Insgesamt")]
+    if (is_total) {
+      db_alter(con, sprintf(
+        "SELECT
+          GITTER_ID_%s, x_mp_%s, y_mp_%s,
+          %s AS %s
+        FROM
+          %s",
+        res, res, res, col_total, feat, table
+      ))
+    } else if (!is_households && !is_dwellings && length(col_total)) {
+      # If not dealing with totals, the total column must be dropped if it
+      # exists, otherwise it will be recognized as a category downstream
+      dbExecute(con, sprintf("ALTER TABLE %s DROP COLUMN %s", table, col_total))
+    }
+
+    # "households" is another special case of totals, which I infer from the
+    # combined totals  of households by household size ("household_size_group").
+    if (is_households) {
+      db_alter(con, sprintf(
+        'SELECT
+          GITTER_ID_%s, x_mp_%s, y_mp_%s,
+          SUM("1_Person") + SUM("2_Personen") +
+            SUM("3_Personen") + SUM("4_Personen") +
+            SUM("5_Personen") + SUM("6_Personen_und_mehr")
+            AS households
+        FROM
+          %s
+        GROUP BY
+          GITTER_ID_%s, x_mp_%s, y_mp_%s',
+        res, res, res, table, res, res, res
+      ))
+    }
+
+    if (is_dwellings) {
+      # The number of dwelling attribute only comes together with the net rent.
+      # Net rent, however, has its own data file, meaning it would be duplicated.
+      dbExecute(con, sprintf("ALTER TABLE %s DROP COLUMN durchschnMieteQM", table))
+    }
+
+
+    if (is_dwellings) {
+      # The 2022 grid data files use the comma for two different uses:
+      # - as a thousand separator (in case of integers)
+      # - as a decimal separator (in case of decimal numbers)
+      # As there isn't really any way to differentiate between integers and
+      # floats if the columns need to be parsed as strings, I am simply making
+      # the difference between "dwellings" (where the problem occurs)
+      # and every other table. Yes, this is silly. The following lines replace
+      # commas with nothing or a dot and then cast to numeric
+      cnames <- setdiff(dbListFields(con, table), "AnzahlWohnungen")
+      cnames <- paste(cnames, collapse = ", ")
+      db_alter(
+        con,
+        sprintf(
+          "SELECT
+            %s,
+            cast(
+              regexp_replace(cast(AnzahlWohnungen AS VARCHAR), ',', '')
+              AS INTEGER
+            ) AS AnzahlWohnungen
+          FROM %s",
+          cnames, table
+        )
       )
     }
 
@@ -65,48 +129,70 @@ for (feat in z22_feats) {
     # harmonize this approach with the one from 2011 by assigning only the
     # highest or lowest quality value depending on whether the value "KLAMMERN"
     # exists. If it exists, the value aggregation is probably unreliable.
-    if ("werterlaeuternde_Zeichen" %in% csv$columns) {
-      csv <- mutate(
-        csv,
-        quality = if_else(werterlaeuternde_Zeichen %in% "KLAMMERN", 2, 0),
-        .keep = "unused"
+    if (has_quality) {
+      cnames <- dbListFields(con, table)
+      cnames <- setdiff(cnames, "werterlaeuternde_Zeichen")
+      cnames <- paste(cnames, collapse = ", ")
+      db_alter(
+        con,
+        sprintf(
+          "SELECT
+            %s,
+            CASE WHEN (werterlaeuternde_Zeichen IN ('KLAMMERN')) THEN 2
+            WHEN NOT (werterlaeuternde_Zeichen IN ('KLAMMERN')) THEN 0 END
+            AS quality
+          FROM %s",
+          cnames, table
+        )
       )
     }
 
     # Pivot to long format to have all feature names in a column
-    csv <- rename_with(csv, .cols = starts_with(c("x", "y")), \(x) c("x", "y")) |>
-      pivot_longer(
-        !any_of("quality") & !starts_with(c("GITTER", "x", "y")),
-        names_to = "category",
-        values_to = "value"
+    cnames <- dbListFields(con, table)
+    cat_names <- cnames[
+      !map_lgl(tolower(cnames), ~any(startsWith(.x, c("gitter", "x", "y")))) &
+        !cnames %in% "quality"
+    ]
+    meta_names <- setdiff(cnames, cat_names)
+
+    sql <- lapply(cat_names, function(col) {
+      meta_names <- paste(meta_names, collapse = ", ")
+      sprintf(
+        "SELECT %s, '%s' AS category, \"%s\" AS value FROM %s",
+        meta_names, col, col, table
       )
+    })
+    sql <- paste(sql, collapse = "\nUNION ALL\n")
+    db_alter(con, sql)
 
-    cols <- csv$columns
+    # Rename inspire grid, x and y
+    db_alter(
+      con,
+      sprintf(
+        "SELECT
+          GITTER_ID_%s AS inspire,
+          x_mp_%s AS x,
+          y_mp_%s AS y,
+          category, value%s
+        FROM %s",
+        res, res, res, ifelse(has_quality, ", quality", ""), table
+      )
+    )
 
-    # This does not work if columns contain decimal numbers.
-    # https://github.com/pola-rs/polars/issues/17289
-    # sink_parquet(csv, clean_file)
+    # z22 features should always use the category codes established by z11.
+    # If this is not possible, just take the index numbers.
+    # If only a single category exists (for all continuous features), create
+    # a single category with category code 0
+    cat_names <- cat_names[!startsWith(cat_names, "Insgesamt")]
+    cat_codes <- categories[[feat]]$code %||% 0
+    for (cat_i in seq_along(cat_names)) {
+      cat <- cat_names[cat_i]
+      cat_code <- cat_codes[cat_i]
 
-    # Workaround using `collect()`. This is applied to all tables for
-    # consistency, even if they would work using `sink_parquet`.
-    # It takes a lot longer but what can you do.
-    t <- try(arrow::write_parquet(collect(csv), clean_file))
-    if (inherits(t, "try-error")) browser()
-
-    # Import to DuckDB database
-    dbExecute(con, sprintf(paste(
-      "CREATE TABLE IF NOT EXISTS %s AS SELECT x, y, category, value FROM '%s'"
-    ), table, clean_file))
-
-    cats <- dbGetQuery(con, sprintf("SELECT DISTINCT category FROM %s", table))[[1]]
-
-    # Uncomment to check whether category codes match the ones from z11
-    lookup <- data.frame(code = seq_along(cats), cat = cats)
-    write.csv(lookup, sprintf("lookup/lookup_%s_%s.csv", res, feat), row.names = FALSE)
-
-    for (cat_code in seq_along(cats)) {
-      out_file <- paste0(feat, "_", cat_code, ".parquet")
-
+      log <- "- Storing feat: {feat}, resolution: {res}, category: {cat} ({cat_code})"
+      log <- cli::format_inline(log)
+      cli::cli_inform(log)
+      cat(log, "\n", file = sprintf("z22_data_%s/export.log", res), append = TRUE)
       dbExecute(
         con,
         sprintf(
@@ -115,12 +201,12 @@ for (feat in z22_feats) {
             FROM %s
             WHERE category = '%s'
           )
-          TO 'z22_data_%s/%s' (
+          TO 'z22_data_%s/%s_%s.parquet' (
             FORMAT PARQUET,
             CODEC 'zstd',
             COMPRESSION_LEVEL -7
           )",
-          table, cats[cat_code], res, out_file
+          table, cat, res, feat, cat_code
         )
       )
     }

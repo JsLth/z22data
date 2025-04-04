@@ -1,6 +1,6 @@
 source("data-raw/0-setup.R")
 
-con <- connect()
+con <- connect("z11")
 
 overwrite <- FALSE
 dir.create("data-raw/raw", showWarnings = FALSE)
@@ -29,28 +29,33 @@ new_names <- list(
 
 # Create a grid table for later reference. This is used to join the
 # coordinates to the feature tables.
-grid_file <- download_z11_grid()
-dbExecute(con, sprintf(
-  "CREATE TABLE _grid AS
-  SELECT
-    Gitter_ID_100m AS grid_100m,
-    x_mp_100m AS x,
-    y_mp_100m AS y
-  FROM  read_csv(
-    '%s',
-    delim = '%s',
-    header = true,
-    columns = {
-      'Gitter_ID_100m': 'String',
-      'x_mp_100m': 'Int32',
-      'y_mp_100m': 'Int32',
-      'Einwohner': 'Int32'
-    },
-    escape = '\"',
-    encoding = 'latin-1'
-  )",
-  grid_file, guess_sep(grid_file)
-))
+grid_file <- "data-raw/raw/grid.csv"
+if (!file.exists(grid_file)) {
+  down_file <- download_z11_grid()
+  file.rename(down_file, grid_file)
+  dbExecute(con, sprintf(
+    "CREATE TABLE IF NOT EXISTS _grid AS
+    SELECT
+      Gitter_ID_100m AS grid_100m,
+      x_mp_100m AS x,
+      y_mp_100m AS y
+    FROM  read_csv(
+      '%s',
+      delim = '%s',
+      header = true,
+      columns = {
+        'Gitter_ID_100m': 'String',
+        'x_mp_100m': 'Int32',
+        'y_mp_100m': 'Int32',
+        'Einwohner': 'Int32'
+      },
+      escape = '\"',
+      encoding = 'latin-1'
+    )",
+    grid_file, guess_sep(grid_file)
+  ))
+}
+
 
 for (theme in names(z11_100m_files)) {
   all_feats <- overview[tolower(overview$theme) %in% theme, ]
@@ -93,16 +98,20 @@ for (theme in names(z11_100m_files)) {
     theme, theme_file, sep, dtypes
   ))
 
+  # Rename columns to more readable names
+  if (!any(dbListFields(con, theme) %in% new_names)) {
+    name_select <- paste(
+      paste(names(new_names), "AS", new_names ),
+      collapse = ", "
+    )
+    db_alter(con, sprintf("SELECT %s FROM %s", name_select, theme))
+  }
+
   # Join with grid to retrieve x/y coordinates
-  name_select <- paste(paste(
-    paste0("t.", names(new_names)),
-    "AS",
-    new_names
-  ), collapse = ", ")
   db_alter(con, sprintf(
-    "SELECT %s FROM %s AS t
-    LEFT JOIN _grid AS g ON t.Gitter_ID_100m = g.grid_100m",
-    name_select, theme
+    "SELECT %s, g.x, g.y FROM %s AS t
+    LEFT JOIN _grid AS g ON t.grid_100m = g.grid_100m",
+    paste(paste0("t.", new_names), collapse = ", "), theme
   ))
 
   # For some reason, some feature names contain leading white space
@@ -118,13 +127,26 @@ for (theme in names(z11_100m_files)) {
     theme
   ))
 
-  for (feat in feat_combos$feature) {
+  for (feat in unique(feat_combos$feature)) {
     is_ambiguous <- which(endsWith(all_feats$z11_100m, theme))
     feat_new <- all_feats$name[startsWith(all_feats$z11_100m, feat)]
+    cat_codes <- feat_combos[feat_combos$feature %in% feat, ]$cat_code
 
-    for (cat in feat_combos$cat_code) {
+    # HHTYP_SENIOR_HH is grouped under families, but really doesnt belong there,
+    # so we manually adjust
+    if (identical(feat, "HHTYP_SENIOR_HH")) {
+      feat_new <- "household_senior"
+    }
+
+    for (cat in cat_codes) {
       combo_table <- sprintf("%s_%s", feat_new, cat)
       parq_file <- sprintf("z11_data_100m/%s.parquet", combo_table)
+
+      if (!overwrite && file.exists(parq_file)) {
+        next
+      }
+
+      cli::cli_inform("Storing {combo_table}")
 
       # Extract a table for each combination of feature/category
       # and export it to parquet
