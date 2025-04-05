@@ -1,8 +1,8 @@
 categories <- list(
   birth_country = tibble::tibble(
     code = c(1, 20, 21, 22, 23, 24),
-    german = c("Deutschland", "Ausland", "EU27-Land", "Europa", "Welt", "Sonstige"),
-    english = c("Germany", "Foreign", "EU27 country", "Europe", "World", "Other"),
+    german = c("Deutschland", "Ausland", "EU27-Land", "Sonstiges Europa", "Sonstige Welt", "Sonstige"),
+    english = c("Germany", "Foreign", "EU27 country", "Other Europe", "Other World", "Other"),
   ),
   sex = tibble::tibble(
     code = 1:2,
