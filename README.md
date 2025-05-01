@@ -35,3 +35,5 @@ Generally, the data BKG and German Census data are available under a [Data licen
 Germany – attribution – version 2.0](https://www.govdata.de/dl-de/by-2-0) and
 can be manipulated and openly shared. **Yet, as part of this repository, use them
 at your own risk and do not take the correctness of the data files for granted.**
+The raw grid data is retrieved from the Federal Agency for Cartography and Geodesy
+(BKG), © GeoBasis-DE / BKG 2025.
