@@ -13,6 +13,6 @@ for (feat in colnames(tb)[-1:-3]) {
     x = x_mp_1km,
     y = y_mp_1km
   )
-  file <- file.path("z11_data_1km/", paste0(feat_new, ".parquet"))
+  file <- file.path("z11_data_1km/", paste0(feat_new, "_0.parquet"))
   arrow::write_parquet(tb_feat, file, compression = "zstd", compression_level = -7)
 }
