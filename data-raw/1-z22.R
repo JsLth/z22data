@@ -5,7 +5,6 @@ dir.create("data-raw/raw", showWarnings = FALSE)
 dir.create("z22_data_100m", showWarnings = FALSE)
 dir.create("z22_data_1km", showWarnings = FALSE)
 dir.create("z22_data_10km", showWarnings = FALSE)
-dir.create("lookup", showWarnings = FALSE)
 
 for (feat in na.omit(overview$z22)) {
   file_paths <- download_table(feat, year = 2022)

@@ -85,10 +85,10 @@ overview <- tribble(
 #     `Zensus11 (1km)` = if_else(!is.na(z11_1km), "\u2705", "\u274c")
 #   )
 
-z22_base_url <- "https://www.zensus2022.de/static/Zensus_Veroeffentlichung/"
+z22_base_url <- "https://www.destatis.de/static/DE/zensus/gitterdaten/"
 z11_base_url <- "https://www.zensus2022.de/static/DE/gitterzellen/"
 
-list(
+z22_files <- list(
   population = "Zensus2022_Bevoelkerungszahl.zip",
   citizens = "Deutsche_Staatsangehoerige_ab_18_Jahren.zip",
   foreigners = "Auslaenderanteil_in_Gitterzellen.zip",
@@ -107,7 +107,7 @@ list(
   households = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
   household_size_avg = "Durchschnittliche_Haushaltsgroesse_in_Gitterzellen.zip",
   household_size_group = "Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip",
-  dwellings = "Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen_in_Gitterzellen.zip",
+  dwellings = "Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen.zip",
   rent_avg = "Zensus2022_Durchschn_Nettokaltmiete.zip",
   owner_occupier = "Eigentuemerquote_in_Gitterzellen.zip",
   vacancies = "Leerstandsquote_in_Gitterzellen.zip",
@@ -121,9 +121,9 @@ list(
   dwelling_heat_src = "Zensus2022_Energietraeger.zip",
   buildings = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
   building_constr_year = "Gebaeude_nach_Baujahr_in_Mikrozensus_Klassen.zip",
-  building_dwellings = "Gebaeude_mit_Wohnraum_nach_Anzahl_der_Wohnungen_im_Gebaeude.zip",
+  building_dwellings = "Gebaeude_nach_Anzahl_der_Wohnungen_im_Gebaeude.zip",
   building_size = "Gebaeude_mit_Wohnraum_nach_Gebaeudetyp_Groesse.zip",
-  building_heat_type = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsartt.zip",
+  building_heat_type = "Gebaeude_mit_Wohnraum_nach_ueberwiegender_Heizungsart.zip",
   building_heat_src = "Gebaeude_mit_Wohnraum_nach_Energietraeger_der_Heizung.zip"
 )
 
