@@ -1,10 +1,7 @@
 categories <- list(
   birth_country = tibble::tibble(
     code = c(1, 20, 21, 22, 23, 24),
-    german = c(
-      "Deutschland", "Ausland", "EU27-Land", "Sonstiges Europa", "Sonstige Welt",
-      "Sonstige"
-    ),
+    german = c("Deutschland", "Ausland", "EU27-Land", "Sonstiges Europa", "Sonstige Welt", "Sonstige"),
     english = c("Germany", "Foreign", "EU27 country", "Other Europe", "Other World", "Other"),
   ),
   sex = tibble::tibble(
@@ -27,11 +24,8 @@ categories <- list(
   ),
   citizenship_group = tibble::tibble(
     code = c(1, 20, 21, 22, 23, 24),
-    german = c(
-      "Deutschland", "Sonstiges Ausland", "EU27-Land", "Sonstiges Europa",
-      "Sonstige Welt", "Sonstige"
-    ),
-    english = c("Germany", "Foreign", "EU27 Country", "Other Europe", "Other World", "Other"),
+    german = c("Deutschland", "Ausland", "EU27-Land", "Europa", "Welt", "Sonstige"),
+    english = c("Germany", "Foreign", "EU27 Country", "Europe", "World", "Other"),
   ),
   citizenship_origin = tibble::tibble(
     code = 1:14,
