@@ -14,8 +14,7 @@ for (feat in na.omit(overview$z22)) {
     file.rename(file, feat_file)
     res <- regex_match(file, "100m|10km|1km")[[1]]
     table <- paste0(feat, "_", res)
-    is_total <- feat %in% c("families", "buildings")
-    is_households <- feat %in% "households"
+    is_total <- feat %in% c("families", "buildings", "households")
     is_dwellings <- feat %in% "dwellings"
     sep <- if_else(is_dwellings, ".", ",")
     enc <- readr::guess_encoding(feat_file)$encoding[1]
@@ -65,38 +64,17 @@ for (feat in na.omit(overview$z22)) {
           %s",
         res, res, res, col_total, feat, table
       ))
-    } else if (!is_households && !is_dwellings && length(col_total)) {
+    } else if (!is_dwellings && length(col_total)) {
       # If not dealing with totals, the total column must be dropped if it
       # exists, otherwise it will be recognized as a category downstream
       dbExecute(con, sprintf("ALTER TABLE %s DROP COLUMN %s", table, col_total))
-    }
-
-    # "households" is another special case of totals, which I infer from the
-    # combined totals  of households by household size ("household_size_group").
-    if (is_households) {
-      db_alter(con, sprintf(
-        'SELECT
-          GITTER_ID_%s, x_mp_%s, y_mp_%s,
-          SUM("1_Person") + SUM("2_Personen") +
-            SUM("3_Personen") + SUM("4_Personen") +
-            SUM("5_Personen") + SUM("6_Personen_und_mehr")
-            AS households
-        FROM
-          %s
-        GROUP BY
-          GITTER_ID_%s, x_mp_%s, y_mp_%s',
-        res, res, res, table, res, res, res
-      ))
     }
 
     if (is_dwellings) {
       # The number of dwelling attribute only comes together with the net rent.
       # Net rent, however, has its own data file, meaning it would be duplicated.
       dbExecute(con, sprintf("ALTER TABLE %s DROP COLUMN durchschnMieteQM", table))
-    }
 
-
-    if (is_dwellings) {
       # The 2022 grid data files use the comma for two different uses:
       # - as a thousand separator (in case of integers)
       # - as a decimal separator (in case of decimal numbers)
@@ -121,6 +99,7 @@ for (feat in na.omit(overview$z22)) {
         )
       )
     }
+
 
     # Census 2022 data do not have a quality column which divides the quality
     # into 3 categories. Instead, they have an "extra info" column that gives

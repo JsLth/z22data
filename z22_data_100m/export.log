@@ -578,3 +578,7 @@
 - Storing feat: building_heat_src, resolution: 100m, category: Kohle (7) 
 - Storing feat: building_heat_src, resolution: 100m, category: Fernwaerme (8) 
 - Storing feat: building_heat_src, resolution: 100m, category: kein_Energietraeger (9) 
+- Storing feat: households, resolution: 100m, category: households (0) 
+- Storing feat: households, resolution: 100m, category: households (0) 
+- Storing feat: households, resolution: 100m, category: households (0) 
+- Storing feat: households, resolution: 100m, category: households (0) 
